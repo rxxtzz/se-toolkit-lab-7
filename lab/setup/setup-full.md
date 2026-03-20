@@ -273,7 +273,7 @@ See [tools](../../wiki/software-types.md#tool).
 ### 1.14. Set up the `Telegram` bot
 
 1. [Create a `Telegram` bot](../../wiki/bot.md#create-a-telegram-bot).
-2. [Set up the bot environment](../../wiki/bot.md#set-up-the-bot-environment) on your VM (REMOTE).
+2. [Set up the bot environment](../../wiki/bot.md#configure-the-environment-remote) on your VM (REMOTE).
 
 ### 1.15. Set up the `Autochecker` bot
 
