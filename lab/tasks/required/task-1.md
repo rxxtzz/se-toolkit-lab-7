@@ -43,7 +43,7 @@ uv run bot.py --test "what labs are available"    # Task 3
 ```
 
 - Prints response to **stdout**, exits with code **0**
-- Reads config from `.env.bot.secret` (`LMS_API_URL`, `LMS_API_KEY`, `LLM_API_KEY`)
+- Reads config from `.env.bot.secret` (`LMS_API_BASE_URL`, `LMS_API_KEY`, `LLM_API_KEY`)
 - Does **not** connect to Telegram (no `BOT_TOKEN` needed in test mode)
 
 ## Deliverables
@@ -66,7 +66,7 @@ Bot-specific Python project with dependencies. `cd bot && uv sync` must work wit
 
 ### 5. Environment files
 
-`.env.bot.example` must include `BOT_TOKEN`, `LMS_API_URL`, `LMS_API_KEY` with placeholder values. On the VM, `.env.bot.secret` must exist with real values filled in.
+`.env.bot.example` must include `BOT_TOKEN`, `LMS_API_BASE_URL`, `LMS_API_KEY` with placeholder values. On the VM, `.env.bot.secret` must exist with real values filled in.
 
 ## Verify
 
@@ -130,7 +130,7 @@ After verifying with `--test`, deploy the bot on your VM and check it responds i
 - [ ] `bot/pyproject.toml` exists and `cd bot && uv sync` succeeds.
 - [ ] `bot/handlers/` directory exists with at least one module.
 - [ ] `cd bot && uv run bot.py --test "/start"` exits 0 with non-empty output.
-- [ ] `.env.bot.secret` exists on the VM with `BOT_TOKEN`, `LMS_API_URL`, `LMS_API_KEY`.
+- [ ] `.env.bot.secret` exists on the VM with `BOT_TOKEN`, `LMS_API_BASE_URL`, `LMS_API_KEY`.
 - [ ] Bot responds to `/start` in Telegram.
 - [ ] Repo is cloned at `~/se-toolkit-lab-7` on the VM.
 - [ ] Git workflow followed (issue, branch, PR, review, merge).

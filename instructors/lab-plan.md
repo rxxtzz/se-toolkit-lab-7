@@ -523,7 +523,7 @@ Lab 7 forks `se-toolkit-lab-6`. Here's what carries over and what changes.
 
 **Reused with modifications:**
 - `backend_running` — same `ssh_check` type, update port to 42002 and path to `/docs`
-- `.env.example` regex check — different env vars: `BOT_TOKEN`, `LMS_API_URL`,
+- `.env.example` regex check — different env vars: `BOT_TOKEN`, `LMS_API_BASE_URL`,
   `LMS_API_KEY`, `LLM_API_KEY` (same as Lab 6, plus `BOT_TOKEN`)
 - `glob_exists` for required files — different file list (PLAN.md, handlers/,
   bot.py vs Lab 6's agent.py, AGENT.md)

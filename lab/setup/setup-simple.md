@@ -429,7 +429,7 @@ You need a Telegram bot token to run your bot client.
 
    ```text
    BOT_TOKEN=your-token-from-botfather
-   LMS_API_URL=http://localhost:42002
+   LMS_API_BASE_URL=http://localhost:42002
    LMS_API_KEY=same-value-as-in-env-docker-secret
    LLM_API_KEY=your-qwen-api-key-from-step-1.9
    LLM_API_BASE_URL=http://localhost:42005/v1

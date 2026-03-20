@@ -5,7 +5,7 @@
 - [About `.env.bot.secret`](#about-envbotsecret)
 - [`BOT_TOKEN`](#bot_token)
 - [LMS backend connection](#lms-backend-connection)
-  - [`LMS_API_URL`](#lms_api_url)
+  - [`LMS_API_BASE_URL`](#lms_api_base_url)
   - [`LMS_API_KEY`](#lms_api_key)
 - [LLM API](#llm-api)
   - [`LLM_API_KEY`](#llm_api_key)
@@ -34,7 +34,7 @@ Default: `<bot-token>`
 
 The bot calls these endpoints to communicate with the [LMS API](./lms-api.md#about-the-lms-api).
 
-### `LMS_API_URL`
+### `LMS_API_BASE_URL`
 
 The [LMS API base URL](./lms-api.md#lms-api-base-url).
 
