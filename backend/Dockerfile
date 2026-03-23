@@ -18,18 +18,23 @@ ENV UV_NO_DEV=1
 # for an example.
 ENV UV_PYTHON_DOWNLOADS=0
 
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && update-ca-certificates
+
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+
 WORKDIR /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=backend/pyproject.toml,target=backend/pyproject.toml \
-    uv sync --locked --no-install-project
+    
+    UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple uv sync --frozen --no-install-project --native-tls
 
 COPY backend /app/backend
 COPY pyproject.toml uv.lock /app/
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked
+    uv sync --frozen
 
 # ---
 # Stage 2: use a final image without uv
