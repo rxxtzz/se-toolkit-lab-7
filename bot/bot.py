@@ -165,6 +165,20 @@ async def run_test_mode(input_text: str) -> int:
         # Check if it's a command (starts with /)
         if text.startswith("/"):
             command, args = parse_command(text)
+            
+            # Check if command exists
+            if command not in COMMAND_HANDLERS:
+                print(
+                    f"Unknown command: /{command}\n\n"
+                    f"Use /help to see available commands:\n"
+                    f"  /start - Welcome message\n"
+                    f"  /help - Available commands\n"
+                    f"  /health - System status\n"
+                    f"  /labs - View available labs\n"
+                    f"  /scores <lab_id> - Check your scores"
+                )
+                return 0
+            
             response = run_handler(command, args)
         else:
             # Natural language query - classify intent first
