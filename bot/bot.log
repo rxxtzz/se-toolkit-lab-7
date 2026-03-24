@@ -1,2 +1,5 @@
 2026-03-23 23:16:09,814 - __main__ - INFO - Starting in production mode
 2026-03-23 23:16:10,000 - __main__ - INFO - Starting Telegram bot...
+nohup: ignoring input
+error: Failed to spawn: `bot.py`
+  Caused by: No such file or directory (os error 2)
