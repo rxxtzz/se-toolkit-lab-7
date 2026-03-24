@@ -2,7 +2,6 @@
 name = "se-toolkit-lab-7-bot"
 version = "0.1.0"
 description = "SE Toolkit Lab 7 Telegram Bot"
-readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "python-telegram-bot>=20.0",
