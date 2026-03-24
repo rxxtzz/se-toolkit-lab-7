@@ -13,6 +13,7 @@ Usage:
 import argparse
 import asyncio
 import logging
+import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -22,11 +23,10 @@ from handlers.base import HandlerContext
 from handlers import (
     handle_start,
     handle_help,
-    handle_health,
-    handle_labs,
-    handle_scores,
 )
-from services.llm_client import LLMClient
+from handlers.health import handle_health, handle_health_async
+from handlers.labs import handle_labs, handle_labs_async
+from handlers.scores import handle_scores, handle_scores_async
 
 # Configure logging
 logging.basicConfig(
@@ -35,13 +35,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Command router: maps command names to handler functions
-COMMAND_HANDLERS = {
+# Sync command handlers
+SYNC_COMMAND_HANDLERS = {
     "start": handle_start,
     "help": handle_help,
     "health": handle_health,
     "labs": handle_labs,
     "scores": handle_scores,
+}
+
+# Async command handlers
+ASYNC_COMMAND_HANDLERS = {
+    "start": handle_start,
+    "help": handle_help,
+    "health": handle_health_async,
+    "labs": handle_labs_async,
+    "scores": handle_scores_async,
 }
 
 
@@ -68,31 +77,6 @@ def parse_command(input_text: str) -> tuple[str, Optional[str]]:
     return command, args
 
 
-async def classify_intent(text: str) -> str:
-    """Classify the intent of a natural language query.
-
-    Args:
-        text: The user's message text.
-
-    Returns:
-        The classified intent (command name).
-    """
-    try:
-        config = load_config(require_bot_token=False)
-        if not config.llm_api_key or not config.llm_api_base_url:
-            # Fall back to keyword-based classification
-            return _classify_intent_keywords(text)
-
-        client = LLMClient(config.llm_api_key, config.llm_api_base_url)
-        intent = await client.classify_intent(text)
-        logger.info(f"LLM classified intent: {intent}")
-        return intent if intent in COMMAND_HANDLERS else "unknown"
-
-    except Exception as e:
-        logger.warning(f"Intent classification failed: {e}, using keyword fallback")
-        return _classify_intent_keywords(text)
-
-
 def _classify_intent_keywords(text: str) -> str:
     """Keyword-based intent classification fallback.
 
@@ -104,23 +88,22 @@ def _classify_intent_keywords(text: str) -> str:
     """
     text_lower = text.lower()
 
-    # Check for specific patterns
     if any(kw in text_lower for kw in ["start", "hello", "hi", "begin"]):
         return "start"
     elif any(kw in text_lower for kw in ["help", "command", "what can", "how to"]):
         return "help"
-    elif any(kw in text_lower for kw in ["health", "status", "online", "working"]):
+    elif any(kw in text_lower for kw in ["health", "status", "online", "working", "backend"]):
         return "health"
     elif any(kw in text_lower for kw in ["lab", "assignment", "available"]):
         return "labs"
-    elif any(kw in text_lower for kw in ["score", "grade", "result", "mark"]):
+    elif any(kw in text_lower for kw in ["score", "grade", "result", "mark", "pass rate"]):
         return "scores"
 
     return "unknown"
 
 
-def run_handler(command: str, args: Optional[str] = None) -> str:
-    """Run a handler for the given command.
+async def run_handler_async(command: str, args: Optional[str] = None) -> str:
+    """Run an async handler for the given command.
 
     Args:
         command: The command name (e.g., "start", "help").
@@ -128,30 +111,35 @@ def run_handler(command: str, args: Optional[str] = None) -> str:
 
     Returns:
         The handler's response message.
-
-    Raises:
-        ValueError: If the command is not found.
     """
-    handler = COMMAND_HANDLERS.get(command)
+    handler = ASYNC_COMMAND_HANDLERS.get(command)
 
     if not handler:
-        raise ValueError(f"Unknown command: /{command}. Use /help for available commands.")
+        return (
+            f"Unknown command: /{command}\n\n"
+            f"Use /help to see available commands:\n"
+            f"  /start - Welcome message\n"
+            f"  /help - Available commands\n"
+            f"  /health - System status\n"
+            f"  /labs - View available labs\n"
+            f"  /scores <lab_id> - Check your scores"
+        )
 
-    # Create context (no user info in test mode)
     ctx = HandlerContext(user_id=None, username=None, args=args)
 
-    # Run the handler
-    result = handler(ctx)
-
-    if not result.success:
-        logger.error(f"Handler failed: {result.error}")
-        return f"Error: {result.error}"
-
-    return result.message
+    try:
+        result = handler(ctx)
+        # Check if result is a coroutine (async handler) or HandlerResult (sync handler)
+        if asyncio.iscoroutine(result):
+            result = await result
+        return result.message
+    except Exception as e:
+        logger.exception(f"Handler {command} failed")
+        return f"Error: {e}"
 
 
 async def run_test_mode(input_text: str) -> int:
-    """Run the bot in test mode.
+    """Run the bot in test mode with async handlers.
 
     Args:
         input_text: The command to test (e.g., "/start" or "what labs are available").
@@ -162,27 +150,11 @@ async def run_test_mode(input_text: str) -> int:
     try:
         text = input_text.strip()
 
-        # Check if it's a command (starts with /)
         if text.startswith("/"):
             command, args = parse_command(text)
-            
-            # Check if command exists
-            if command not in COMMAND_HANDLERS:
-                print(
-                    f"Unknown command: /{command}\n\n"
-                    f"Use /help to see available commands:\n"
-                    f"  /start - Welcome message\n"
-                    f"  /help - Available commands\n"
-                    f"  /health - System status\n"
-                    f"  /labs - View available labs\n"
-                    f"  /scores <lab_id> - Check your scores"
-                )
-                return 0
-            
-            response = run_handler(command, args)
+            response = await run_handler_async(command, args)
         else:
-            # Natural language query - classify intent first
-            intent = await classify_intent(text)
+            intent = _classify_intent_keywords(text)
             logger.info(f"Classified intent: {intent} for: {text}")
 
             if intent == "unknown":
@@ -196,24 +168,17 @@ async def run_test_mode(input_text: str) -> int:
                 )
                 return 0
 
-            # Extract lab_id if intent is scores
             args = None
             if intent == "scores":
-                # Try to extract lab_id from text
-                import re
                 match = re.search(r'lab-?\d+', text.lower())
                 if match:
-                    args = match.group().replace('-', '')
-                    args = f"lab-{args.split('lab')[1]}" if 'lab' in args else args
+                    args = match.group()
 
-            response = run_handler(intent, args)
+            response = await run_handler_async(intent, args)
 
         print(response)
         return 0
 
-    except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
     except Exception as e:
         logger.exception("Unexpected error in test mode")
         print(f"Error: {e}", file=sys.stderr)
@@ -227,7 +192,6 @@ async def run_telegram_bot(config: Config) -> None:
         config: Bot configuration.
     """
     try:
-        # Import telegram libraries only when needed
         from telegram import Update
         from telegram.ext import (
             Application,
@@ -247,19 +211,16 @@ async def run_telegram_bot(config: Config) -> None:
             if not command:
                 return
 
-            # Get command arguments
             args = " ".join(context.args) if context.args else None
 
-            # Run the handler
-            ctx = HandlerContext(
-                user_id=update.effective_user.id,
-                username=update.effective_user.username,
-                args=args,
-            )
-
-            handler = COMMAND_HANDLERS.get(command)
+            handler = ASYNC_COMMAND_HANDLERS.get(command)
             if handler:
-                result = handler(ctx)
+                ctx = HandlerContext(
+                    user_id=update.effective_user.id,
+                    username=update.effective_user.username,
+                    args=args,
+                )
+                result = await handler(ctx)
                 await update.message.reply_text(result.message)
             else:
                 await update.message.reply_text(
@@ -267,7 +228,7 @@ async def run_telegram_bot(config: Config) -> None:
                 )
 
         async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-            """Handle natural language messages (intent routing)."""
+            """Handle natural language messages."""
             if update.effective_message is None:
                 return
 
@@ -275,8 +236,7 @@ async def run_telegram_bot(config: Config) -> None:
             if not text:
                 return
 
-            # Classify intent and route to appropriate handler
-            intent = await classify_intent(text)
+            intent = _classify_intent_keywords(text)
             logger.info(f"Classified intent: {intent} for: {text}")
 
             if intent == "unknown":
@@ -290,43 +250,39 @@ async def run_telegram_bot(config: Config) -> None:
                 )
                 return
 
-            # Create context and run handler
             ctx = HandlerContext(
                 user_id=update.effective_user.id,
                 username=update.effective_user.username,
                 args=None,
             )
-            handler = COMMAND_HANDLERS.get(intent)
+            handler = ASYNC_COMMAND_HANDLERS.get(intent)
             if handler:
-                result = handler(ctx)
+                result = await handler(ctx)
                 await update.message.reply_text(result.message)
 
-        # Build request with proxy support if configured
         request_kwargs = {}
-        if config.telegram_proxy_url:
+        if config.telegram_proxy_url and config.telegram_proxy_url != "http://your-proxy:port":
             logger.info(f"Using Telegram proxy: {config.telegram_proxy_url}")
-            request_kwargs["proxy_url"] = config.telegram_proxy_url
+            try:
+                request_kwargs["proxy"] = config.telegram_proxy_url
+            except Exception as e:
+                logger.warning(f"Invalid proxy URL: {e}")
 
-        # Create the application with proxy support
         application = Application.builder()\
             .token(config.bot_token)\
             .request(HTTPXRequest(**request_kwargs) if request_kwargs else None)\
             .build()
 
-        # Add command handlers
-        for command in COMMAND_HANDLERS.keys():
+        for command in ASYNC_COMMAND_HANDLERS.keys():
             application.add_handler(CommandHandler(command, handle_command))
 
-        # Add message handler for natural language
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-        # Start the bot
         logger.info("Starting Telegram bot...")
         await application.initialize()
         await application.start()
         await application.updater.start_polling()
 
-        # Keep running
         while True:
             await asyncio.sleep(1)
 
@@ -363,18 +319,14 @@ def main() -> int:
 
     args = parser.parse_args()
 
-    # Test mode
     if args.test:
         logger.info(f"Running in test mode with command: {args.test}")
         return asyncio.run(run_test_mode(args.test))
 
-    # Production mode (Telegram bot)
     logger.info("Starting in production mode")
 
-    # Load configuration
     env_file = args.env_file
     if not env_file:
-        # Default to bot directory
         bot_dir = Path(__file__).parent
         for name in [".env.bot.secret", ".env.bot", ".env"]:
             if (bot_dir / name).exists():
@@ -388,7 +340,6 @@ def main() -> int:
         logger.error(f"Configuration error: {e}")
         sys.exit(1)
 
-    # Run the Telegram bot
     try:
         asyncio.run(run_telegram_bot(config))
     except KeyboardInterrupt:

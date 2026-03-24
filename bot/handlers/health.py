@@ -1,12 +1,17 @@
 """Handler for /health command."""
 
+import asyncio
+from typing import Optional
+
 from services.lms_client import LMSClient
-from services.llm_client import LLMClient
 from .base import HandlerContext, HandlerResult
 
 
 def handle_health(ctx: HandlerContext) -> HandlerResult:
     """Handle the /health command.
+
+    This is a synchronous wrapper that returns a placeholder.
+    For actual health checks, use handle_health_async.
 
     Args:
         ctx: Handler context with user information.
@@ -14,50 +19,53 @@ def handle_health(ctx: HandlerContext) -> HandlerResult:
     Returns:
         HandlerResult with health status.
     """
-    # Return a static response - actual health checks are done by the caller
-    # if they need async operations
+    # This is called from sync context - return placeholder
+    # Async version should be used in async contexts
     message = (
-        "🏥 *System Health Status*\n\n"
-        "✅ Bot: Online\n"
-        "⏳ LMS API: Checking...\n"
-        "⏳ LLM Service: Checking...\n\n"
-        "All systems operational."
+        "🏥 System Health Status\n\n"
+        "Checking backend...\n\n"
+        "Use test mode for detailed health check."
     )
-
     return HandlerResult.ok(message)
 
 
-async def check_health_services() -> tuple[bool, bool]:
-    """Check health of external services.
+async def handle_health_async(ctx: HandlerContext) -> HandlerResult:
+    """Handle the /health command with actual backend check.
+
+    Args:
+        ctx: Handler context with user information.
 
     Returns:
-        Tuple of (lms_healthy, llm_healthy).
+        HandlerResult with health status.
     """
     from config import load_config
-
-    lms_healthy = False
-    llm_healthy = False
 
     try:
         config = load_config(require_bot_token=False)
 
-        # Check LMS
-        if config.lms_api_base_url and config.lms_api_key:
-            try:
-                client = LMSClient(config.lms_api_base_url, config.lms_api_key)
-                lms_healthy = await client.health_check()
-            except Exception:
-                pass
+        if not config.lms_api_base_url or not config.lms_api_key:
+            return HandlerResult.fail(
+                error="LMS_API configuration missing",
+                message="Backend configuration incomplete. Check LMS_API_BASE_URL and LMS_API_KEY."
+            )
 
-        # Check LLM
-        if config.llm_api_key and config.llm_api_base_url:
-            try:
-                client = LLMClient(config.llm_api_key, config.llm_api_base_url)
-                llm_healthy = await client.health_check()
-            except Exception:
-                pass
+        client = LMSClient(config.lms_api_base_url, config.lms_api_key)
+        is_healthy, item_count, error_msg = await client.health_check()
 
-    except Exception:
-        pass
+        if is_healthy:
+            message = (
+                f"✅ Backend is healthy. {item_count} items available.\n\n"
+                f"API: {config.lms_api_base_url}"
+            )
+            return HandlerResult.ok(message)
+        else:
+            message = (
+                f"❌ Backend error: {error_msg}\n\n"
+                f"Check that the services are running."
+            )
+            return HandlerResult.ok(message)
 
-    return lms_healthy, llm_healthy
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {str(e)}"
+        message = f"❌ Backend error: {error_msg}"
+        return HandlerResult.ok(message)
