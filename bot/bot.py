@@ -4,10 +4,12 @@
 Entry point for the bot with support for:
 - Telegram bot mode (production)
 - Test mode via --test flag (offline testing)
+- LLM-powered intent routing for natural language queries
 
 Usage:
     uv run bot.py                  # Start Telegram bot
     uv run bot.py --test "/start"  # Test a command offline
+    uv run bot.py --test "what labs are available"  # Test natural language
 """
 
 import argparse
@@ -23,6 +25,7 @@ from handlers.base import HandlerContext
 from handlers import (
     handle_start,
     handle_help,
+    handle_natural_language,
 )
 from handlers.health import handle_health, handle_health_async
 from handlers.labs import handle_labs, handle_labs_async
@@ -52,6 +55,68 @@ ASYNC_COMMAND_HANDLERS = {
     "labs": handle_labs_async,
     "scores": handle_scores_async,
 }
+
+# Inline keyboard buttons for common actions
+def get_main_keyboard():
+    """Get inline keyboard with common actions."""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("📚 Available Labs", callback_data="labs"),
+            InlineKeyboardButton("🏥 System Health", callback_data="health"),
+        ],
+        [
+            InlineKeyboardButton("📊 Lab 04 Scores", callback_data="scores_lab-04"),
+            InlineKeyboardButton("📈 Lab 03 Scores", callback_data="scores_lab-03"),
+        ],
+        [
+            InlineKeyboardButton("❓ Help", callback_data="help"),
+        ],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+async def handle_callback(update, context):
+    """Handle inline keyboard button callbacks."""
+    from telegram import Update
+    
+    query = update.callback_query
+    if query is None:
+        return
+    
+    await query.answer()
+    
+    action = query.data
+    
+    if action == "labs":
+        handler = handle_labs_async
+    elif action == "health":
+        handler = handle_health_async
+    elif action == "help":
+        handler = handle_help
+    elif action.startswith("scores_"):
+        lab_id = action.replace("scores_", "")
+        handler = lambda ctx: handle_scores_async(ctx)
+        # Create custom context with lab_id
+        ctx = HandlerContext(
+            user_id=query.from_user.id if query.from_user else None,
+            username=query.from_user.username if query.from_user else None,
+            args=lab_id,
+        )
+        result = await handler(ctx)
+        await query.edit_message_text(result.message)
+        return
+    else:
+        return
+    
+    ctx = HandlerContext(
+        user_id=query.from_user.id if query.from_user else None,
+        username=query.from_user.username if query.from_user else None,
+        args=None,
+    )
+    result = await handler(ctx)
+    await query.edit_message_text(result.message)
 
 
 def parse_command(input_text: str) -> tuple[str, Optional[str]]:
@@ -139,7 +204,7 @@ async def run_handler_async(command: str, args: Optional[str] = None) -> str:
 
 
 async def run_test_mode(input_text: str) -> int:
-    """Run the bot in test mode with async handlers.
+    """Run the bot in test mode with async handlers and LLM routing.
 
     Args:
         input_text: The command to test (e.g., "/start" or "what labs are available").
@@ -154,27 +219,11 @@ async def run_test_mode(input_text: str) -> int:
             command, args = parse_command(text)
             response = await run_handler_async(command, args)
         else:
-            intent = _classify_intent_keywords(text)
-            logger.info(f"Classified intent: {intent} for: {text}")
-
-            if intent == "unknown":
-                print(
-                    "I'm not sure what you're asking. Try using commands like:\n"
-                    "  /start - Welcome message\n"
-                    "  /help - Available commands\n"
-                    "  /labs - View available labs\n"
-                    "  /scores <lab_id> - Check your scores\n"
-                    "  /health - System status"
-                )
-                return 0
-
-            args = None
-            if intent == "scores":
-                match = re.search(r'lab-?\d+', text.lower())
-                if match:
-                    args = match.group()
-
-            response = await run_handler_async(intent, args)
+            # Use LLM-powered intent routing for natural language
+            logger.info(f"Natural language query: {text}")
+            ctx = HandlerContext(user_id=None, username=None, args=text)
+            result = await handle_natural_language(ctx)
+            response = result.message
 
         print(response)
         return 0
@@ -195,6 +244,7 @@ async def run_telegram_bot(config: Config) -> None:
         from telegram import Update
         from telegram.ext import (
             Application,
+            CallbackQueryHandler,
             CommandHandler,
             ContextTypes,
             MessageHandler,
@@ -221,14 +271,22 @@ async def run_telegram_bot(config: Config) -> None:
                     args=args,
                 )
                 result = await handler(ctx)
-                await update.message.reply_text(result.message)
+                
+                # Add inline keyboard for /start command
+                if command == "start":
+                    await update.message.reply_text(
+                        result.message,
+                        reply_markup=get_main_keyboard()
+                    )
+                else:
+                    await update.message.reply_text(result.message)
             else:
                 await update.message.reply_text(
                     f"Unknown command: /{command}. Use /help for available commands."
                 )
 
         async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-            """Handle natural language messages."""
+            """Handle natural language messages using LLM routing."""
             if update.effective_message is None:
                 return
 
@@ -236,29 +294,15 @@ async def run_telegram_bot(config: Config) -> None:
             if not text:
                 return
 
-            intent = _classify_intent_keywords(text)
-            logger.info(f"Classified intent: {intent} for: {text}")
-
-            if intent == "unknown":
-                await update.message.reply_text(
-                    "I'm not sure what you're asking. Try using commands like:\n"
-                    "/start - Welcome message\n"
-                    "/help - Available commands\n"
-                    "/labs - View available labs\n"
-                    "/scores <lab_id> - Check your scores\n"
-                    "/health - System status"
-                )
-                return
+            logger.info(f"Natural language message: {text[:50]}...")
 
             ctx = HandlerContext(
                 user_id=update.effective_user.id,
                 username=update.effective_user.username,
-                args=None,
+                args=text,
             )
-            handler = ASYNC_COMMAND_HANDLERS.get(intent)
-            if handler:
-                result = await handler(ctx)
-                await update.message.reply_text(result.message)
+            result = await handle_natural_language(ctx)
+            await update.message.reply_text(result.message)
 
         request_kwargs = {}
         if config.telegram_proxy_url and config.telegram_proxy_url != "http://your-proxy:port":
@@ -276,9 +320,13 @@ async def run_telegram_bot(config: Config) -> None:
         for command in ASYNC_COMMAND_HANDLERS.keys():
             application.add_handler(CommandHandler(command, handle_command))
 
+        # Add callback query handler for inline buttons
+        application.add_handler(CallbackQueryHandler(handle_callback))
+
+        # Add message handler for natural language (must be last)
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-        logger.info("Starting Telegram bot...")
+        logger.info("Starting Telegram bot with LLM routing...")
         await application.initialize()
         await application.start()
         await application.updater.start_polling()
