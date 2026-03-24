@@ -57,6 +57,188 @@ class LMSClient:
             "Content-Type": "application/json",
         }
 
+    async def get_items(self) -> List[Dict[str, Any]]:
+        """Fetch all items (labs and tasks) from /items/ endpoint.
+
+        Returns:
+            List of item dictionaries.
+
+        Raises:
+            httpx.RequestError: If the API request fails.
+        """
+        url = f"{self.base_url}/items/"
+        logger.info(f"Fetching items from {url}")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=self._headers, timeout=10.0)
+            response.raise_for_status()
+            return response.json()
+
+    async def get_learners(self) -> List[Dict[str, Any]]:
+        """Fetch all learners from /learners/ endpoint.
+
+        Returns:
+            List of learner dictionaries.
+
+        Raises:
+            httpx.RequestError: If the API request fails.
+        """
+        url = f"{self.base_url}/learners/"
+        logger.info(f"Fetching learners from {url}")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=self._headers, timeout=10.0)
+            response.raise_for_status()
+            return response.json()
+
+    async def get_scores(self, lab_id: str) -> List[Dict[str, Any]]:
+        """Fetch score distribution for a lab from /analytics/scores endpoint.
+
+        Args:
+            lab_id: The lab ID to fetch scores for.
+
+        Returns:
+            List of score bucket dictionaries.
+
+        Raises:
+            httpx.RequestError: If the API request fails.
+        """
+        url = f"{self.base_url}/analytics/scores"
+        logger.info(f"Fetching scores for {lab_id} from {url}")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url,
+                headers=self._headers,
+                params={"lab": lab_id},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def get_timeline(self, lab_id: str) -> List[Dict[str, Any]]:
+        """Fetch submission timeline for a lab from /analytics/timeline endpoint.
+
+        Args:
+            lab_id: The lab ID to fetch timeline for.
+
+        Returns:
+            List of timeline entry dictionaries.
+
+        Raises:
+            httpx.RequestError: If the API request fails.
+        """
+        url = f"{self.base_url}/analytics/timeline"
+        logger.info(f"Fetching timeline for {lab_id} from {url}")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url,
+                headers=self._headers,
+                params={"lab": lab_id},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def get_groups(self, lab_id: str) -> List[Dict[str, Any]]:
+        """Fetch group performance for a lab from /analytics/groups endpoint.
+
+        Args:
+            lab_id: The lab ID to fetch groups for.
+
+        Returns:
+            List of group performance dictionaries.
+
+        Raises:
+            httpx.RequestError: If the API request fails.
+        """
+        url = f"{self.base_url}/analytics/groups"
+        logger.info(f"Fetching groups for {lab_id} from {url}")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url,
+                headers=self._headers,
+                params={"lab": lab_id},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def get_top_learners(self, lab_id: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Fetch top learners for a lab from /analytics/top-learners endpoint.
+
+        Args:
+            lab_id: The lab ID to fetch top learners for.
+            limit: Maximum number of learners to return.
+
+        Returns:
+            List of top learner dictionaries.
+
+        Raises:
+            httpx.RequestError: If the API request fails.
+        """
+        url = f"{self.base_url}/analytics/top-learners"
+        logger.info(f"Fetching top {limit} learners for {lab_id} from {url}")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url,
+                headers=self._headers,
+                params={"lab": lab_id, "limit": limit},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def get_completion_rate(self, lab_id: str) -> Dict[str, Any]:
+        """Fetch completion rate for a lab from /analytics/completion-rate endpoint.
+
+        Args:
+            lab_id: The lab ID to fetch completion rate for.
+
+        Returns:
+            Completion rate dictionary.
+
+        Raises:
+            httpx.RequestError: If the API request fails.
+        """
+        url = f"{self.base_url}/analytics/completion-rate"
+        logger.info(f"Fetching completion rate for {lab_id} from {url}")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url,
+                headers=self._headers,
+                params={"lab": lab_id},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def trigger_sync(self) -> Dict[str, Any]:
+        """Trigger ETL sync from /pipeline/sync endpoint.
+
+        Returns:
+            Sync result dictionary.
+
+        Raises:
+            httpx.RequestError: If the API request fails.
+        """
+        url = f"{self.base_url}/pipeline/sync"
+        logger.info(f"Triggering sync at {url}")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url,
+                headers=self._headers,
+                json={},
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            return response.json()
+
     async def get_labs(self) -> List[Lab]:
         """Fetch all available labs from /items/ endpoint.
 

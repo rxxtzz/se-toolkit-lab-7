@@ -21,6 +21,7 @@ class Config:
     # LLM API
     llm_api_key: Optional[str] = None
     llm_api_base_url: Optional[str] = None
+    llm_api_model: Optional[str] = None
 
     @classmethod
     def from_env(cls, env_file: Optional[str] = None) -> "Config":
@@ -44,6 +45,7 @@ class Config:
             lms_api_key=os.getenv("LMS_API_KEY"),
             llm_api_key=os.getenv("LLM_API_KEY"),
             llm_api_base_url=os.getenv("LLM_API_BASE_URL"),
+            llm_api_model=os.getenv("LLM_API_MODEL"),
         )
 
     @staticmethod
